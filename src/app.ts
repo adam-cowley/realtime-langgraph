@@ -2,7 +2,7 @@ import express, { static as static_} from 'express'
 import { readFileSync } from 'fs'
 import { json } from 'body-parser'
 
-import { langgraph } from './graph';
+import { langgraph, State } from './graph';
 import { initSocketServer, io } from './socket';
 
 const app = express()
@@ -19,20 +19,39 @@ app.get('/', (req, res) => {
 app.post('/message', async (req, res) => {
   const thread_id = req.headers['x-thread-id'] as string
 
-  res.send(thread_id)
+  res.header('Content-type', 'text/event-stream')
+    .header('Cache-Control', 'no-cache')
+    .flushHeaders()
 
-  const output = await langgraph.invoke(
-    { input: req.body.message },
-    {
-      configurable: {
-        thread_id,
-        res,
+    const output = langgraph.invoke(
+      { input: req.body.message },
+      {
+        configurable: {
+          thread_id,
+          res,
+        }
       }
-    }
-  )
+    )
+    .then((result: State) => {
+      // Message sent at last checkpoint - no need to send it here
+      /*
+      const last = result.messages.pop()
 
-  io.to(thread_id).emit("RESULT", {
-    message: output.messages[ output.messages.length -1 ].content
+      if (last && res.writable) {
+        // res.write(JSON.stringify({
+        //   stage: 'END',
+        //   message: last.content,
+        // }))
+        console.log('end', res.writable)
+        }
+      */
+
+        // End the stream
+      res.end()
+    })
+
+  res.on('close', () => {
+    res.end()
   })
 })
 

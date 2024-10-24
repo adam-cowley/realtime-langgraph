@@ -4,7 +4,7 @@ import { AIMessage, BaseMessage, HumanMessage } from "@langchain/core/messages";
 import { RunnableConfig } from "@langchain/core/runnables";
 import { CheckpointListOptions, ChannelVersions, PendingWrite } from "@langchain/langgraph-checkpoint";
 import { io } from "./socket";
-import { Response } from "express";
+import { Request, Response } from "express";
 
 const sleep = () => {
   return new Promise((resolve) => {
@@ -12,27 +12,30 @@ const sleep = () => {
   })
 }
 
+const StateAnnotation = Annotation.Root({
+  input: Annotation<string>(),
+  messages: Annotation<BaseMessage[]>({
+    reducer: (x, y) => x.concat(y),
+  }),
+  stage: Annotation<ProcessStage>(),
+})
+
+export type State = typeof StateAnnotation.State
+
 const NODE_INFERING = 'infering'
 async function infering() {
   await sleep()
   return {
-    messages: [new AIMessage('Infering...')],
+    messages: [new AIMessage('I am Infering...')],
     stage: ProcessStage.INFERING,
   }
 }
-
-// const NODE_LOADING = 'loading'
-// async function loading() {
-//   return {
-//     stage: ProcessStage.LOADING,
-//   }
-// }
 
 const NODE_THINKING = 'thinking'
 async function thinking() {
   await sleep()
   return {
-    messages: [new AIMessage('Thinking...')],
+    messages: [new AIMessage('I am Thinking...')],
     stage: ProcessStage.THINKING,
   }
 }
@@ -41,7 +44,7 @@ const NODE_SEARCHING = 'searching'
 async function searching() {
   await sleep()
   return {
-    messages: [new AIMessage('Searching...')],
+    messages: [new AIMessage('I am Searching...')],
     stage: ProcessStage.SEARCHING,
   }
 }
@@ -51,7 +54,7 @@ const NODE_REASONING = 'reasoning'
 async function reasoning() {
   await sleep()
   return {
-    messages: [new AIMessage('Reasoning...')],
+    messages: [new AIMessage('I am Reasoning...')],
     stage: ProcessStage.REASONING,
   }
 }
@@ -67,13 +70,7 @@ async function answering() {
 }
 
 
-const StateAnnotation = Annotation.Root({
-  input: Annotation<string>(),
-  messages: Annotation<BaseMessage[]>({
-    reducer: (x, y) => x.concat(y),
-  }),
-  stage: Annotation<ProcessStage>(),
-})
+
 
 const workflow = new StateGraph(StateAnnotation)
   .addNode(NODE_INFERING, infering)
@@ -89,15 +86,38 @@ const workflow = new StateGraph(StateAnnotation)
   .addEdge(NODE_REASONING, NODE_ANSWERING)
   .addEdge(NODE_ANSWERING, END)
 
+  class SSECheckpointer extends MemorySaver {
+    async put(config: RunnableConfig, checkpoint: Checkpoint, metadata: CheckpointMetadata): Promise<RunnableConfig> {
+      if (metadata.writes) {
+        const res: Response | undefined = config.configurable?.res
 
+        const keys: string[] = Object.keys(metadata.writes)
+        const state = metadata.writes[keys[0]] as typeof StateAnnotation.State
 
+        if (state) {
+          let message
+
+          if (state.messages?.length > 0) {
+            message = state.messages[state.messages.length - 1].content
+          }
+
+          const stage = state.stage
+
+          if (res) {
+            res.write(JSON.stringify({message, stage}))
+          }
+        }
+      }
+
+      return super.put(config, checkpoint, metadata)
+    }
+  }
 
 class SocketsCheckpointer extends MemorySaver {
   async put(config: RunnableConfig, checkpoint: Checkpoint, metadata: CheckpointMetadata): Promise<RunnableConfig> {
     if (metadata.writes) {
       const keys: string[] = Object.keys(metadata.writes)
       const state = metadata.writes[keys[0]]
-
 
       if (state) {
         let message
@@ -122,8 +142,6 @@ class SocketsCheckpointer extends MemorySaver {
   }
 }
 
-
-
 export const langgraph = workflow.compile({
-  checkpointer: new SocketsCheckpointer(),
+  checkpointer: new SSECheckpointer(),
 })

@@ -1,5 +1,3 @@
-
-const io_ = io();
 const SESSION_ID = "_ID"
 
 let id = window.localStorage.getItem(SESSION_ID)
@@ -12,47 +10,48 @@ if (id === undefined || id === null) {
 
 document.getElementById('conversation').innerHTML = id
 
-io_.on('connect', () => {
-  io_.send('IDENTIFY', {
-    type: 'IDENTIFY',
-    id,
-  })
-
-  io_.on('WELCOME', e => {
-    console.log('welcomed', e)
-  })
-
-  io_.on('UPDATE', e => {
-    document.getElementById("stage").innerHTML = `${e.stage}: ${e.message || '-'}`
-
-    console.log('update', e)
-  }
-)
-  io_.on('RESULT', e => {
-    console.log('result', e)
-
-    document.getElementById("answer").innerHTML = e.message
-    document.getElementById("stage").innerHTML = "complete"
-  })
-
-
-})
-
-
-
-document.getElementById("form").addEventListener('submit', e => {
+document.getElementById("form").addEventListener('submit', async e => {
   e.preventDefault()
 
-  fetch('/message', {
+  const res = await fetch('/message', {
     method: 'POST',
     body: JSON.stringify({
       message: document.getElementById('message').value
     }),
     headers: {
       'Content-type': 'application/json',
+      "Accept": "text/event-stream",
       'x-thread-id': id,
     }
   })
 
+  const reader = res.body.getReader()
 
+  const decoder = new TextDecoder("utf-8");
+  let payload = null
+
+  while (true) {
+    const { value, done } = await reader.read();
+
+    decoded = decoder.decode(value)
+    console.log('decoded', JSON.stringify(decoded))
+
+    // Empty
+    if (decoded !== '') {
+      payload = JSON.parse(decoded)
+      console.log('parsed as', payload)
+
+      if (payload) {
+        document.getElementById("stage").innerHTML = `${payload.stage || 'waiting'}: ${payload.message || '-'}`
+      }
+
+      if (done) {
+        console.log('done', payload)
+        break;
+      }
+    }
+  }
+
+  document.getElementById("answer").innerHTML = payload.message
+  document.getElementById("stage").innerHTML = "complete"
 })
