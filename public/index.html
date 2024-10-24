@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="/style.css" />
+  <title>App</title>
+</head>
+<body>
+  <p>Conversation ID: <strong id="conversation"></strong></p>
+
+  <form id="form" action="/message/" method="POST">
+    <input type="text" name="message" id="message" value="hello">
+    <button type="submit">Submit</button>
+  </form>
+
+  <div>
+    Status:
+    <strong id="stage">Waiting</strong>
+  </div>
+
+  <div id="messages"></div>
+  <div id="answer"></div>
+
+
+  <script src="/socket.io/socket.io.js"></script>
+  <!-- <script src="https://cdn.socket.io/4.4.0/socket.io.min.js" integrity="sha384-1fOn6VtTq3PWwfsOrk45LnYcGosJwzMHv+Xh/Jx5303FVOXzEnw0EpLv30mtjmlj" crossorigin="anonymous"></script> -->
+
+  <script src="/ui.js"></script>
+
+</body>
+</html>
