@@ -5,6 +5,8 @@ import { json } from 'body-parser'
 import { langgraph, State } from './graph';
 import { initSocketServer, io } from './socket';
 
+import { BaseMessage } from '@langchain/core/messages';
+
 const app = express()
 
 app.use(json())
@@ -23,36 +25,39 @@ app.post('/message', async (req, res) => {
     .header('Cache-Control', 'no-cache')
     .flushHeaders()
 
-    const output = langgraph.invoke(
-      { input: req.body.message },
-      {
-        configurable: {
-          thread_id,
-          res,
-        }
-      }
-    )
-    .then((result: State) => {
-      // Message sent at last checkpoint - no need to send it here
-      /*
-      const last = result.messages.pop()
-
-      if (last && res.writable) {
-        // res.write(JSON.stringify({
-        //   stage: 'END',
-        //   message: last.content,
-        // }))
-        console.log('end', res.writable)
-        }
-      */
-
-        // End the stream
-      res.end()
-    })
+  const controller = new AbortController();
 
   res.on('close', () => {
+    controller.abort('Connection Closed')
     res.end()
   })
+
+  try {
+
+    for await (
+      const { messages, stage } of await langgraph.stream(
+        { input: req.body.message },
+        {
+          configurable: { thread_id, },
+          streamMode: "values",
+          signal: controller.signal,
+        })
+    ) {
+      if (messages?.length) {
+        const last = (messages as BaseMessage[]).pop()
+
+        res.write(JSON.stringify({
+          stage,
+          message: last?.content})
+        )
+      }
+    }
+
+    res.end()
+  }
+  catch (e) {
+    console.log(e)
+  }
 })
 
 app.post('/message-sockets', async (req, res) => {

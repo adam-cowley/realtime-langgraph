@@ -70,6 +70,16 @@ async function answering() {
 }
 
 
+const checkResponseIsWritable = (otherwiseGoTo: string) =>
+  (state_: State, config?: RunnableConfig) => {
+    if (config?.configurable?.res) {
+      const res = config?.configurable?.res as Response
+      if (!res.writable) {
+        return END
+      }
+    }
+    return otherwiseGoTo
+  }
 
 
 const workflow = new StateGraph(StateAnnotation)
@@ -80,7 +90,8 @@ const workflow = new StateGraph(StateAnnotation)
   .addNode(NODE_ANSWERING, answering)
 
   .addEdge(START, NODE_INFERING)
-  .addEdge(NODE_INFERING, NODE_THINKING)
+  // .addEdge(NODE_INFERING, NODE_THINKING)
+  .addConditionalEdges(NODE_INFERING, checkResponseIsWritable(NODE_THINKING))
   .addEdge(NODE_THINKING, NODE_SEARCHING)
   .addEdge(NODE_SEARCHING, NODE_REASONING)
   .addEdge(NODE_REASONING, NODE_ANSWERING)
@@ -143,5 +154,5 @@ class SocketsCheckpointer extends MemorySaver {
 }
 
 export const langgraph = workflow.compile({
-  checkpointer: new SSECheckpointer(),
+  // checkpointer: new SSECheckpointer(),
 })

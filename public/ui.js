@@ -13,6 +13,13 @@ document.getElementById('conversation').innerHTML = id
 document.getElementById("form").addEventListener('submit', async e => {
   e.preventDefault()
 
+  // const controller = new AbortController()
+  // const request = new Request(
+  //   "/message",
+  //   // { signal: controller.signal }
+  //   { signal: AbortSignal.timeout(1000) }
+  // )
+
   const res = await fetch('/message', {
     method: 'POST',
     body: JSON.stringify({
@@ -22,7 +29,8 @@ document.getElementById("form").addEventListener('submit', async e => {
       'Content-type': 'application/json',
       "Accept": "text/event-stream",
       'x-thread-id': id,
-    }
+    },
+    signal: AbortSignal.timeout(2000),
   })
 
   const reader = res.body.getReader()
@@ -37,19 +45,22 @@ document.getElementById("form").addEventListener('submit', async e => {
     console.log('decoded', JSON.stringify(decoded))
 
     // Empty
-    if (decoded !== '') {
-      payload = JSON.parse(decoded)
-      console.log('parsed as', payload)
-
-      if (payload) {
-        document.getElementById("stage").innerHTML = `${payload.stage || 'waiting'}: ${payload.message || '-'}`
-      }
-
-      if (done) {
-        console.log('done', payload)
-        break;
-      }
+    if (decoded === '') {
+      break
     }
+
+    payload = JSON.parse(decoded)
+    console.log('parsed as', payload)
+
+    if (payload) {
+      document.getElementById("stage").innerHTML = `${payload.stage || 'waiting'}: ${payload.message || '-'}`
+    }
+
+    if (done) {
+      console.log('done', payload)
+      break;
+    }
+
   }
 
   document.getElementById("answer").innerHTML = payload.message
